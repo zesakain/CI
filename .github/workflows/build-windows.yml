@@ -90,7 +90,7 @@ jobs:
             
             rm -rf citron
             
-            if git clone --recurse-submodules --shallow-submodules --depth 1 "https://github.com/citron-neo/emulator.git" citron; then
+            if git clone --recursive "https://github.com/citron-neo/emulator.git" citron; then
               echo "Clone successful on attempt $ATTEMPT."
               break
             fi
@@ -103,14 +103,6 @@ jobs:
             echo "Clone failed. Retrying in 15 seconds..."
             sleep 15
           done
-
-      - name: Ensure vcpkg has full history
-        working-directory: ./citron
-        shell: bash
-        run: |
-          if [ "$(git -C externals/vcpkg rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
-            git -C externals/vcpkg fetch --unshallow --tags
-          fi
 
       - name: Cache vcpkg and Qt dependencies
         uses: actions/cache@v4

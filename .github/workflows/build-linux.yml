@@ -117,7 +117,7 @@ jobs:
             # 1. CRITICAL: Wipe the directory before every attempt
             rm -rf emulator
 
-            if git clone --recurse-submodules --shallow-submodules --depth 1 "https://github.com/citron-neo/emulator.git" emulator; then
+            if git clone --recursive "https://github.com/citron-neo/emulator.git" emulator; then
               echo "✅ Clone successful on attempt $ATTEMPT."
               exit 0
             fi

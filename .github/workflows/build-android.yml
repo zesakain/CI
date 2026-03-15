@@ -112,13 +112,13 @@ jobs:
 
             if [ "${{ needs.check-version.outputs.branch_name }}" = "$FEATURE" ]; then
               echo "🌿 Cloning feature branch: ${{ needs.check-version.outputs.branch_name }}"
-              if git clone --recurse-submodules --shallow-submodules --depth 1 -b "$FEATURE" "$REPO_URL" citron_source; then
+              if git clone --recursive -b "$FEATURE" "$REPO_URL" citron_source; then
                 echo "✅ Clone successful."
                 exit 0
               fi
             else
               echo "📦 Cloning main branch"
-              if git clone --recurse-submodules --shallow-submodules --depth 1 "$REPO_URL" citron_source; then
+              if git clone --recursive "$REPO_URL" citron_source; then
                 echo "✅ Clone successful."
                 exit 0
               fi
@@ -135,14 +135,7 @@ jobs:
         working-directory: ./citron_source
         run: |
           git submodule sync --recursive
-          git submodule update --init --recursive --depth 1 --force
-
-      - name: Ensure vcpkg has full history
-        working-directory: ./citron_source
-        run: |
-          if [ "$(git -C externals/vcpkg rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
-            git -C externals/vcpkg fetch --unshallow --tags
-          fi
+          git submodule update --init --recursive --force
 
       - name: Get Citron Commit Hash
         id: get_hash
@@ -239,13 +232,13 @@ jobs:
 
             if [ "${{ needs.check-version.outputs.branch_name }}" = "$FEATURE" ]; then
               echo "🌿 Cloning feature branch: ${{ needs.check-version.outputs.branch_name }}"
-              if git clone --recurse-submodules --shallow-submodules --depth 1 -b "$FEATURE" "$REPO_URL" citron_source; then
+              if git clone --recursive -b "$FEATURE" "$REPO_URL" citron_source; then
                 echo "✅ Clone successful."
                 exit 0
               fi
             else
               echo "📦 Cloning main branch"
-              if git clone --recurse-submodules --shallow-submodules --depth 1 "$REPO_URL" citron_source; then
+              if git clone --recursive "$REPO_URL" citron_source; then
                 echo "✅ Clone successful."
                 exit 0
               fi
@@ -262,14 +255,7 @@ jobs:
         working-directory: ./citron_source
         run: |
           git submodule sync --recursive
-          git submodule update --init --recursive --depth 1 --force
-
-      - name: Ensure vcpkg has full history
-        working-directory: ./citron_source
-        run: |
-          if [ "$(git -C externals/vcpkg rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
-            git -C externals/vcpkg fetch --unshallow --tags
-          fi
+          git submodule update --init --recursive --force
 
       - name: Get Citron Commit Hash
         id: get_hash
