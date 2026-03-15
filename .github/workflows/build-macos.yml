@@ -78,18 +78,18 @@ jobs:
 
           ATTEMPT=0
           MAX_ATTEMPTS=10
-          
+
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             ATTEMPT=$((ATTEMPT + 1))
             echo "Attempt $ATTEMPT of $MAX_ATTEMPTS: Cloning repository..."
-            
+
             rm -rf citron
-            
+
             if git clone --recursive "https://github.com/citron-neo/emulator.git" citron; then
               echo "✅ Clone successful on attempt $ATTEMPT."
               break
             fi
-            
+
             echo "⚠️ Clone failed. Waiting 30 seconds before retry..."
             sleep 30
           done
@@ -108,12 +108,14 @@ jobs:
       - name: Patch AGL in Qt FindWrapOpenGL.cmake
         working-directory: ./citron
         run: |
-          QT_OPENGL_CMAKE="externals/qt/6.7.3/macos/lib/cmake/Qt6/FindWrapOpenGL.cmake"
-          if [ -f "$QT_OPENGL_CMAKE" ]; then
-            # Replace lines 40-46 with set(__opengl_agl_fw_path "")
+          set -e
+          QT_OPENGL_CMAKE=$(find externals/qt -type f -path "*/macos/lib/cmake/Qt6/FindWrapOpenGL.cmake" | sort -V | tail -n 1)
+
+          if [ -n "$QT_OPENGL_CMAKE" ] && [ -f "$QT_OPENGL_CMAKE" ]; then
+            echo "Patching: $QT_OPENGL_CMAKE"
             awk 'NR>=40 && NR<=46 {if(NR==40) print "          set(__opengl_agl_fw_path \"\")"; next}1' "$QT_OPENGL_CMAKE" > "$QT_OPENGL_CMAKE.tmp" && mv "$QT_OPENGL_CMAKE.tmp" "$QT_OPENGL_CMAKE"
           else
-            echo "Warning: $QT_OPENGL_CMAKE not found, skipping AGL patch"
+            echo "Warning: FindWrapOpenGL.cmake not found under externals/qt, skipping AGL patch"
           fi
 
       - name: Get Nightly Version
@@ -171,11 +173,21 @@ jobs:
           fi
           echo "Found .app bundle at: $APP_BUNDLE_PATH"
 
-          MACDEPLOYQT_PATH="citron/build/externals/qt/6.7.3/macos/bin/macdeployqt"
-          QT_LIB_PATH="citron/build/externals/qt/6.7.3/macos/lib"
+          QT_MACOS_ROOT=$(find citron/build/externals/qt -maxdepth 3 -type d -path "*/macos" | sort -V | tail -n 1)
+          if [ -z "$QT_MACOS_ROOT" ]; then
+            echo "::error::Could not find Qt macOS root under citron/build/externals/qt"
+            exit 1
+          fi
+          echo "Using Qt root: $QT_MACOS_ROOT"
+
+          MACDEPLOYQT_PATH="$QT_MACOS_ROOT/bin/macdeployqt"
+          if [ ! -f "$MACDEPLOYQT_PATH" ]; then
+            MACDEPLOYQT_PATH="$QT_MACOS_ROOT/bin/macdeployqt6"
+          fi
+          QT_LIB_PATH="$QT_MACOS_ROOT/lib"
 
           if [ ! -f "$MACDEPLOYQT_PATH" ]; then
-            echo "::error::Could not find macdeployqt!"
+            echo "::error::Could not find macdeployqt or macdeployqt6 in $QT_MACOS_ROOT/bin"
             exit 1
           fi
 
