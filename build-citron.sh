@@ -20,9 +20,14 @@ if [ "$DEVEL" = 'true' ]; then
     CITRON_TAG="$(git rev-parse --short HEAD)"
     VERSION="$CITRON_TAG"
 else
-    CITRON_TAG=$(git describe --tags)
-    git checkout "$CITRON_TAG"
-    VERSION="$(echo "$CITRON_TAG" | awk -F'-' '{print $1}')"
+    if CITRON_TAG="$(git describe --tags 2>/dev/null)"; then
+        git checkout "$CITRON_TAG"
+        VERSION="$(echo "$CITRON_TAG" | awk -F'-' '{print $1}')"
+    else
+        # Fallback for repositories without tags (or shallow history without reachable tags)
+        VERSION="$(git rev-parse --short HEAD)"
+        echo "No tags found, falling back to commit version: $VERSION"
+    fi
 fi
 
 # --- Apply Necessary Source Code Patches for Compatibility ---
