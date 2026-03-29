@@ -87,6 +87,8 @@ jobs:
             mingw-w64-ucrt-x86_64-SDL2
             mingw-w64-ucrt-x86_64-vulkan-headers
             mingw-w64-ucrt-x86_64-vulkan-loader
+            mingw-w64-ucrt-x86_64-vulkan-utility-libraries
+            mingw-w64-ucrt-x86_64-vulkan-memory-allocator
             mingw-w64-ucrt-x86_64-openssl
             mingw-w64-ucrt-x86_64-boost
             mingw-w64-ucrt-x86_64-nlohmann-json
@@ -150,8 +152,8 @@ jobs:
             -DCITRON_USE_BUNDLED_QT=OFF \
             -DCITRON_USE_BUNDLED_FFMPEG=OFF \
             -DCITRON_USE_EXTERNAL_SDL2=ON \
-            -DCITRON_USE_EXTERNAL_VULKAN_HEADERS=OFF \
-            -DCITRON_USE_EXTERNAL_VULKAN_UTILITY_LIBRARIES=OFF \
+            -DCITRON_USE_EXTERNAL_VULKAN_HEADERS=ON \
+            -DCITRON_USE_EXTERNAL_VULKAN_UTILITY_LIBRARIES=ON \
             -DCITRON_BUILD_TYPE=Release \
             -DCITRON_TESTS=OFF \
             -DENABLE_QT=ON \
