@@ -474,6 +474,7 @@ jobs:
         run: |
           chmod +x build-clangtron-windows.sh
           ./build-clangtron-windows.sh setup
+          echo "${GITHUB_WORKSPACE}/citron/build/llvm-mingw/bin" >> "$GITHUB_PATH"
 
       - name: Build Citron (Clangtron LTO)
         working-directory: ./citron
