@@ -409,6 +409,14 @@ jobs:
           path: citron/build/use-nopgo/externals/ffmpeg-${{ steps.ffmpeg-ver.outputs.VERSION }}
           key: clangtron-ffmpeg-built-${{ runner.os }}-${{ steps.ffmpeg-ver.outputs.VERSION }}-${{ hashFiles('citron/build-clangtron-windows.sh') }}
 
+      - name: Cache Qt (Clangtron)
+        uses: actions/cache@v4
+        with:
+          path: |
+            citron/build/use-nopgo/externals/qt
+            citron/build/use-nopgo/externals/qt-host
+          key: clangtron-qt-6.9.3-${{ runner.os }}-${{ hashFiles('citron/build-clangtron-windows.sh') }}
+
       - name: Setup Clangtron Build Environment
         working-directory: ./citron
         run: |
