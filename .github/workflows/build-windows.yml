@@ -374,8 +374,10 @@ jobs:
       - name: Cache vcpkg archives (Clangtron)
         uses: actions/cache@v4
         with:
-          path: ~/.vcpkg/archives
-          key: clangtron-vcpkg-${{ runner.os }}-${{ hashFiles('citron/vcpkg.json') }}
+          path: |
+            ~/.cache/vcpkg/archives
+            citron/externals/vcpkg/downloads
+          key: clangtron-vcpkg-${{ runner.os }}-${{ hashFiles('citron/vcpkg.json', 'citron/build-clangtron-windows.sh') }}
           restore-keys: |
             clangtron-vcpkg-${{ runner.os }}-
 
@@ -393,6 +395,19 @@ jobs:
           echo '#!/bin/bash' | sudo tee /usr/local/bin/merge-fdata-21
           sudo chmod +x /usr/local/bin/llvm-bolt-21
           sudo chmod +x /usr/local/bin/merge-fdata-21
+
+      - name: Get FFmpeg Version
+        id: ffmpeg-ver
+        working-directory: ./citron
+        run: |
+          VERSION=$(tr -d '[:space:]' < externals/ffmpeg/ffmpeg/RELEASE)
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Cache built FFmpeg
+        uses: actions/cache@v4
+        with:
+          path: citron/build/use-nopgo/externals/ffmpeg-${{ steps.ffmpeg-ver.outputs.VERSION }}
+          key: clangtron-ffmpeg-built-${{ runner.os }}-${{ steps.ffmpeg-ver.outputs.VERSION }}-${{ hashFiles('citron/build-clangtron-windows.sh') }}
 
       - name: Setup Clangtron Build Environment
         working-directory: ./citron

@@ -833,8 +833,10 @@ jobs:
       - name: Cache vcpkg archives (Clangtron)
         uses: actions/cache@v4
         with:
-          path: ~/.vcpkg/archives
-          key: clangtron-vcpkg-stable-${{ runner.os }}-${{ hashFiles('citron/vcpkg.json') }}
+          path: |
+            ~/.cache/vcpkg/archives
+            citron/externals/vcpkg/downloads
+          key: clangtron-vcpkg-stable-${{ runner.os }}-${{ hashFiles('citron/vcpkg.json', 'citron/build-clangtron-windows.sh') }}
           restore-keys: |
             clangtron-vcpkg-stable-${{ runner.os }}-
 
@@ -845,6 +847,19 @@ jobs:
           git fetch --tags
           VERSION=$(git rev-parse --short HEAD)
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Get FFmpeg Version
+        id: ffmpeg-ver
+        working-directory: ./citron
+        run: |
+          VERSION=$(tr -d '[:space:]' < externals/ffmpeg/ffmpeg/RELEASE)
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Cache built FFmpeg
+        uses: actions/cache@v4
+        with:
+          path: citron/build/use-nopgo/externals/ffmpeg-${{ steps.ffmpeg-ver.outputs.VERSION }}
+          key: clangtron-ffmpeg-built-stable-${{ runner.os }}-${{ steps.ffmpeg-ver.outputs.VERSION }}-${{ hashFiles('citron/build-clangtron-windows.sh') }}
 
       - name: Skip BOLT build (not needed for --pgo none)
         run: |
