@@ -350,7 +350,7 @@ jobs:
 
             rm -rf citron
 
-            if git clone --recursive --branch clangtron-windows "https://github.com/cheezwiz7899/emulator.git" citron; then
+            if git clone --recursive "https://github.com/citron-neo/emulator.git" citron; then
               echo "Clone successful on attempt $ATTEMPT."
               break
             fi
