@@ -1,10 +1,8 @@
 # 🍋 The Official Citron-CI
 
 [![GitHub Downloads](https://img.shields.io/github/downloads/citron-neo/CI/total?logo=github&label=GitHub%20Downloads)](https://github.com/citron-neo/CI/releases/latest)
-[![Build Citron (Android)](https://github.com/citron-neo/CI/actions/workflows/build-android.yml/badge.svg)](https://github.com/citron-neo/CI/actions/workflows/build-android.yml)
-[![Build Citron (Windows)](https://github.com/citron-neo/CI/actions/workflows/build-windows.yml/badge.svg)](https://github.com/citron-neo/CI/actions/workflows/build-windows.yml)
-[![Build Citron (Linux)](https://github.com/citron-neo/CI/actions/workflows/build-linux.yml/badge.svg)](https://github.com/citron-neo/CI/actions/workflows/build-linux.yml)
-[![Build Citron (macOS)](https://github.com/citron-neo/CI/actions/workflows/build-macos.yml/badge.svg)](https://github.com/citron-neo/CI/actions/workflows/build-macos.yml)
+[![Build Citron (Nightly)](https://github.com/citron-neo/CI/actions/workflows/build_nightly.yml/badge.svg)](https://github.com/citron-neo/CI/actions/workflows/build_nightly.yml)
+[![Build Citron (Stable)](https://github.com/citron-neo/CI/actions/workflows/build_stable.yml/badge.svg)](https://github.com/citron-neo/CI/actions/workflows/build_stable.yml)
 
 ## Star History
 

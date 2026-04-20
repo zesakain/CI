@@ -646,11 +646,126 @@ jobs:
           path: "dist/*.dmg"
 
   # ===========================================================================
-  # WINDOWS: MinGW + MSVC + Clangtron nightly builds and the nightly-windows
-  # GitHub Release are handled exclusively by .github/workflows/build-windows.yml
-  # (same cron). A duplicate release job here used to run after that workflow
-  # and recreate nightly-windows with only the MinGW zip, dropping other assets.
+  # WINDOWS (Clangtron)
   # ===========================================================================
+  build-windows-clangtron:
+    name: "Citron Build (Windows Clangtron - x64)"
+    needs: [check-version]
+    if: needs.check-version.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Clone Citron Source (Clangtron)
+        run: |
+          ATTEMPT=0
+          MAX_ATTEMPTS=999
+          while true; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "Attempt $ATTEMPT of $MAX_ATTEMPTS: Cloning Citron..."
+
+            rm -rf citron
+
+            if git clone --recursive "https://github.com/citron-neo/emulator.git" citron; then
+              echo "Clone successful on attempt $ATTEMPT."
+              break
+            fi
+
+            if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
+              echo "Failed after $MAX_ATTEMPTS attempts."
+              exit 1
+            fi
+
+            echo "Clone failed. Retrying in 15 seconds..."
+            sleep 15
+          done
+
+      - name: Cache llvm-mingw toolchain
+        uses: actions/cache@v4
+        id: cache-llvm-mingw
+        with:
+          path: ./citron/build/llvm-mingw
+          key: clangtron-llvm-mingw-${{ runner.os }}-20260224
+
+      - name: Cache vcpkg archives (Clangtron)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/vcpkg/archives
+            citron/externals/vcpkg/downloads
+          key: clangtron-vcpkg-${{ runner.os }}-${{ hashFiles('citron/vcpkg.json', 'citron/build-clangtron-windows.sh') }}
+          restore-keys: |
+            clangtron-vcpkg-${{ runner.os }}-
+
+      - name: Get Version (Clangtron)
+        id: version
+        working-directory: ./citron
+        run: |
+          git fetch --tags
+          VERSION=$(git rev-parse --short HEAD)
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Skip BOLT build (not needed for --pgo none)
+        run: |
+          echo '#!/bin/bash' | sudo tee /usr/local/bin/llvm-bolt-21
+          echo '#!/bin/bash' | sudo tee /usr/local/bin/merge-fdata-21
+          sudo chmod +x /usr/local/bin/llvm-bolt-21
+          sudo chmod +x /usr/local/bin/merge-fdata-21
+
+      - name: Get FFmpeg Version
+        id: ffmpeg-ver
+        working-directory: ./citron
+        run: |
+          VERSION=$(tr -d '[:space:]' < externals/ffmpeg/ffmpeg/RELEASE)
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Cache built FFmpeg
+        uses: actions/cache@v4
+        with:
+          path: citron/build/use-nopgo/externals/ffmpeg-${{ steps.ffmpeg-ver.outputs.VERSION }}
+          key: clangtron-ffmpeg-built-${{ runner.os }}-${{ steps.ffmpeg-ver.outputs.VERSION }}-${{ hashFiles('citron/build-clangtron-windows.sh') }}
+
+      - name: Cache Qt (Clangtron)
+        uses: actions/cache@v4
+        with:
+          path: |
+            citron/build/use-nopgo/externals/qt
+            citron/build/use-nopgo/externals/qt-host
+          key: clangtron-qt-6.9.3-${{ runner.os }}-${{ hashFiles('citron/build-clangtron-windows.sh') }}
+
+      - name: Setup Clangtron Build Environment
+        working-directory: ./citron
+        run: |
+          chmod +x build-clangtron-windows.sh
+          ./build-clangtron-windows.sh setup
+          echo "${GITHUB_WORKSPACE}/citron/build/llvm-mingw/bin" >> "$GITHUB_PATH"
+
+      - name: Build Citron (Clangtron LTO)
+        working-directory: ./citron
+        run: |
+          export CITRON_BUILD_TYPE=Nightly
+          ./build-clangtron-windows.sh use --pgo none --lto full
+
+      - name: Package Windows Build (Clangtron)
+        run: |
+          mkdir -p dist
+          BIN_DIR="./citron/build/use-nopgo/bin"
+          if [ ! -d "$BIN_DIR" ]; then
+            echo "::error::Build output not found at $BIN_DIR"
+            exit 1
+          fi
+          cd "$BIN_DIR"
+          zip -r "${GITHUB_WORKSPACE}/dist/Citron-windows-nightly-${{ steps.version.outputs.VERSION }}-x64-clangtron.zip" .
+
+      - name: Upload Windows Build (Clangtron)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Citron-Windows-Nightly-Clangtron-x64
+          path: "dist/*.zip"
 
   # ===========================================================================
   # RELEASE - Android
@@ -883,4 +998,74 @@ jobs:
           if [ -z "$WEBHOOK_URL" ]; then echo "DISCORD_WEBHOOK is not set; skipping."; exit 0; fi
           curl -H "Content-Type: application/json" \
                -d "{\"content\":\"🍎 **New macOS Nightly Build!**\n\n📦 **Version:** \`${{ env.APP_VERSION }}\`\n📅 **Date:** ${DATE}\n🔗 **Download:** $DOWNLOAD_URL\"}" \
+               "$WEBHOOK_URL"
+
+  # ===========================================================================
+  # RELEASE - Windows
+  # ===========================================================================
+  release-windows:
+    if: ${{ github.ref_name == 'main' }}
+    name: "Release Windows Nightly"
+    needs: [check-version, build-windows-clangtron]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Citron-Windows-Nightly-Clangtron-x64
+          path: .
+      - name: Get Version from Filename
+        shell: bash
+        run: |
+          FILENAME=$(ls Citron-windows-nightly-*-x64-clangtron.zip)
+          VERSION=${FILENAME#Citron-windows-nightly-}
+          VERSION=${VERSION%-x64-clangtron.zip}
+          echo "APP_VERSION=${VERSION}" >> $GITHUB_ENV
+      - name: Delete Previous Release
+        run: gh release delete "nightly-windows" --repo "${{ github.repository }}" --cleanup-tag -y || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set Build Date
+        run: echo "BUILD_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+      - name: Release Artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Continuous Build (Windows Nightly: ${{ env.APP_VERSION }})"
+          tag_name: "nightly-windows"
+          prerelease: false
+          files: "*.zip"
+          body: |
+            **Citron Upstream Commit:** [`${{ needs.check-version.outputs.new_hash }}`](https://github.com/citron-neo/emulator/commit/${{ needs.check-version.outputs.new_hash_full }})
+
+            This build is based on the latest Citron emulator source code from the upstream repository.
+
+            **Build Details:**
+            - Platform: Windows (x64)
+            - Toolchain: Clangtron (Clang LTO cross-compiled from Linux)
+            - Build Type: Nightly
+            - Date: ${{ env.BUILD_DATE }}
+      - name: Update LATEST_VERSION
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          echo "${{ env.APP_VERSION }}" > LATEST_VERSION
+          git add LATEST_VERSION
+          git commit -m "Update LATEST_VERSION to ${{ env.APP_VERSION }} [skip ci]" || exit 0
+          for i in {1..5}; do
+            git pull --rebase origin main && git push && break || sleep 2
+          done
+      - name: Post to Discord
+        if: success()
+        run: |
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/tag/nightly-windows"
+          DATE=$(date +'%Y-%m-%d')
+          WEBHOOK_URL="${{ secrets.DISCORD_WEBHOOK }}"
+          if [ -z "$WEBHOOK_URL" ]; then echo "DISCORD_WEBHOOK is not set; skipping."; exit 0; fi
+          curl -H "Content-Type: application/json" \
+               -d "{\"content\":\"🪟 **New Windows Nightly Build!**\n\n📦 **Version:** \`${{ env.APP_VERSION }}\`\n📅 **Date:** ${DATE}\n🔧 **Toolchain:** Clangtron (Clang LTO)\n🔗 **Download:** $DOWNLOAD_URL\"}" \
                "$WEBHOOK_URL"

@@ -5,8 +5,6 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  schedule:
-    - cron: "0 12 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -55,278 +53,6 @@ jobs:
             echo "should_build=false" >> $GITHUB_OUTPUT
           fi
 
-  build-mingw:
-    name: "Citron Build (Windows MinGW - x64)"
-    needs: [check-version]
-    if: needs.check-version.outputs.should_build == 'true'
-    runs-on: windows-latest
-    timeout-minutes: 180
-
-    defaults:
-      run:
-        shell: msys2 {0}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          update: true
-          install: >-
-            mingw-w64-ucrt-x86_64-toolchain
-            mingw-w64-ucrt-x86_64-cmake
-            mingw-w64-ucrt-x86_64-ninja
-            mingw-w64-ucrt-x86_64-qt6-base
-            mingw-w64-ucrt-x86_64-qt6-tools
-            mingw-w64-ucrt-x86_64-qt6-multimedia
-            mingw-w64-ucrt-x86_64-qt6-translations
-            mingw-w64-ucrt-x86_64-SDL2
-            mingw-w64-ucrt-x86_64-vulkan-headers
-            mingw-w64-ucrt-x86_64-vulkan-loader
-            mingw-w64-ucrt-x86_64-vulkan-utility-libraries
-            mingw-w64-ucrt-x86_64-vulkan-memory-allocator
-            mingw-w64-ucrt-x86_64-openssl
-            mingw-w64-ucrt-x86_64-boost
-            mingw-w64-ucrt-x86_64-nlohmann-json
-            mingw-w64-ucrt-x86_64-zlib
-            mingw-w64-ucrt-x86_64-zstd
-            mingw-w64-ucrt-x86_64-lz4
-            mingw-w64-ucrt-x86_64-ffmpeg
-            mingw-w64-ucrt-x86_64-opus
-            mingw-w64-ucrt-x86_64-openal
-            mingw-w64-ucrt-x86_64-libusb
-            git
-            base-devel
-
-      - name: Clone Citron Source (MinGW)
-        run: |
-          ATTEMPT=0
-          MAX_ATTEMPTS=999
-          while true; do
-            ATTEMPT=$((ATTEMPT + 1))
-            echo "Attempt $ATTEMPT of $MAX_ATTEMPTS: Cloning Citron..."
-
-            rm -rf citron
-
-            if git clone --recursive "https://github.com/citron-neo/emulator.git" citron; then
-              echo "Clone successful on attempt $ATTEMPT."
-              break
-            fi
-
-            if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
-              echo "Failed after $MAX_ATTEMPTS attempts."
-              exit 1
-            fi
-
-            echo "Clone failed. Retrying in 15 seconds..."
-            sleep 15
-          done
-
-      - name: Cache build directory (MinGW)
-        uses: actions/cache@v4
-        id: cache-build
-        with:
-          path: ./citron/build
-          key: mingw-build-${{ runner.os }}-${{ hashFiles('citron/CMakeLists.txt') }}-${{ hashFiles('.github/workflows/build-windows.yml') }}
-          restore-keys: |
-            mingw-build-${{ runner.os }}-
-
-      - name: Get Version (MinGW)
-        id: version
-        working-directory: ./citron
-        run: |
-          git fetch --tags
-          VERSION=$(git rev-parse --short HEAD)
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-
-      - name: Clear stale CMake cache (MinGW)
-        working-directory: ./citron
-        run: rm -f build/CMakeCache.txt
-
-      - name: Configure CMake (MinGW)
-        working-directory: ./citron
-        run: |
-          cmake -B build -S . -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCITRON_USE_BUNDLED_VCPKG=ON \
-            -DCITRON_USE_BUNDLED_QT=OFF \
-            -DCITRON_USE_BUNDLED_FFMPEG=OFF \
-            -DCITRON_USE_EXTERNAL_SDL2=ON \
-            -DCITRON_USE_EXTERNAL_VULKAN_HEADERS=ON \
-            -DCITRON_USE_EXTERNAL_VULKAN_UTILITY_LIBRARIES=ON \
-            -DCITRON_BUILD_TYPE=Release \
-            -DCITRON_TESTS=OFF \
-            -DENABLE_QT=ON \
-            -DENABLE_QT6=ON \
-            -DENABLE_SDL2=ON \
-            -DENABLE_WEB_SERVICE=ON \
-            -DENABLE_OPENSSL=ON \
-            -DENABLE_CUBEB=OFF \
-            -DENABLE_OPENAL=ON \
-            -DUSE_DISCORD_PRESENCE=OFF \
-            -DCITRON_USE_AUTO_UPDATER=OFF \
-            -DCITRON_USE_PRECOMPILED_HEADERS=ON \
-            -DENABLE_LIBUSB=OFF
-
-      - name: Build Citron (MinGW)
-        working-directory: ./citron
-        run: cmake --build build --config Release -j$(nproc)
-
-      - name: Copy vcpkg runtime DLLs to bin (MinGW)
-        working-directory: ./citron
-        run: |
-          # vcpkg's DLL directory is not on the shell PATH, so CMake's deploy step
-          # and ldd both miss these DLLs entirely.
-          VCPKG_BIN="./build/vcpkg_installed/x64-mingw-dynamic/bin"
-          BIN_DIR="./build/bin"
-          if [ -d "$VCPKG_BIN" ]; then
-            find "$VCPKG_BIN" -maxdepth 1 -name "*.dll" -exec cp -v {} "$BIN_DIR/" \;
-          else
-            echo "Warning: vcpkg bin dir not found at $VCPKG_BIN"
-          fi
-
-
-
-      - name: Package Windows Build (MinGW)
-        shell: pwsh
-        run: |
-          mkdir dist
-          mkdir temp_package
-
-          $binDir = ".\citron\build\bin"
-          if (Test-Path "$binDir\Release") { $binDir = "$binDir\Release" }
-
-          Get-ChildItem $binDir -Recurse | Where-Object {
-            $_.Extension -ne ".pdb" -and $_.Extension -ne ".a" -and $_.Extension -ne ".o"
-          } | ForEach-Object {
-            $relativePath = $_.FullName.Replace((Resolve-Path $binDir).Path, "").TrimStart('\')
-            $destPath = Join-Path ".\temp_package" $relativePath
-            $destDir = Split-Path $destPath -Parent
-            if (!(Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
-            Copy-Item $_.FullName $destPath -Force
-          }
-
-          Compress-Archive -Path ".\temp_package\*" -DestinationPath ".\dist\Citron-windows-nightly-${{ steps.version.outputs.VERSION }}-x64-mingw.zip"
-          Remove-Item ".\temp_package" -Recurse -Force
-
-      - name: Upload Windows Build (MinGW)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Citron-Windows-Nightly-Mingw-x64
-          path: "dist/*.zip"
-
-  build-msvc:
-    name: "Citron Build (Windows MSVC - x64)"
-    needs: [check-version]
-    if: needs.check-version.outputs.should_build == 'true'
-    runs-on: windows-latest
-    timeout-minutes: 180
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Install Vulkan SDK
-        shell: pwsh
-        run: |
-          $vulkan_sdk_url = "https://sdk.lunarg.com/sdk/download/1.3.283.0/windows/VulkanSDK-1.3.283.0-Installer.exe"
-          Invoke-WebRequest -Uri $vulkan_sdk_url -OutFile VulkanSDK-Installer.exe
-          Start-Process -FilePath ".\VulkanSDK-Installer.exe" -ArgumentList "--accept-licenses", "--default-answer", "--confirm-command", "install" -Wait
-          echo "C:\VulkanSDK\1.3.283.0\Bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-
-      - name: Clone Citron Source (MSVC)
-        shell: bash
-        run: |
-          ATTEMPT=0
-          MAX_ATTEMPTS=999
-          while true; do
-            ATTEMPT=$((ATTEMPT + 1))
-            echo "Attempt $ATTEMPT of $MAX_ATTEMPTS: Cloning Citron..."
-
-            rm -rf citron
-
-            if git clone --recursive "https://github.com/citron-neo/emulator.git" citron; then
-              echo "Clone successful on attempt $ATTEMPT."
-              break
-            fi
-
-            if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
-              echo "Failed after $MAX_ATTEMPTS attempts."
-              exit 1
-            fi
-
-            echo "Clone failed. Retrying in 15 seconds..."
-            sleep 15
-          done
-
-      - name: Cache vcpkg and Qt dependencies (MSVC)
-        uses: actions/cache@v4
-        id: cache-vcpkg
-        with:
-          path: |
-            ./citron/build
-            ~/.vcpkg/archives
-            ${{ env.LOCALAPPDATA }}\vcpkg\archives
-          key: vcpkg-qt-cache-x64-${{ runner.os }}-${{ hashFiles('citron/vcpkg.json') }}-${{ hashFiles('citron/externals/vcpkg/.git/HEAD') }}
-          restore-keys: |
-            vcpkg-qt-cache-x64-${{ runner.os }}-${{ hashFiles('citron/vcpkg.json') }}-
-
-      - name: Get Version (MSVC)
-        id: version
-        working-directory: ./citron
-        shell: bash
-        run: |
-          git fetch --tags
-          VERSION=$(git rev-parse --short HEAD)
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-
-      - name: Configure CMake (MSVC)
-        working-directory: ./citron
-        shell: cmd
-        run: |
-          cmake -B build -S . -G "Visual Studio 17 2022" -A x64 ^
-            -DCITRON_USE_BUNDLED_VCPKG=ON ^
-            -DCITRON_BUILD_TYPE=Release ^
-            -DCITRON_ENABLE_LTO=ON ^
-            -DCITRON_USE_BUNDLED_QT=ON ^
-            -DENABLE_QT6=ON ^
-            -DCITRON_TESTS=OFF ^
-            -DUSE_DISCORD_PRESENCE=ON ^
-            -DENABLE_WEB_SERVICE=ON ^
-            -DENABLE_OPENSSL=ON ^
-            -DCITRON_USE_AUTO_UPDATER=ON ^
-            -DCITRON_ENABLE_LIBARCHIVE=ON
-
-      - name: Build Citron (MSVC)
-        working-directory: ./citron
-        shell: cmd
-        run: cmake --build build --config Release --parallel
-
-      - name: Package Windows Build (MSVC)
-        shell: pwsh
-        run: |
-          mkdir dist
-          mkdir temp_package
-          Get-ChildItem ".\citron\build\bin\Release\" -Recurse | Where-Object { $_.Extension -ne ".pdb" } | ForEach-Object {
-            $relativePath = $_.FullName.Replace((Resolve-Path ".\citron\build\bin\Release\").Path, "").TrimStart('\')
-            $destPath = Join-Path ".\temp_package" $relativePath
-            $destDir = Split-Path $destPath -Parent
-            if (!(Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
-            Copy-Item $_.FullName $destPath -Force
-          }
-          Compress-Archive -Path ".\temp_package\*" -DestinationPath ".\dist\Citron-windows-nightly-${{ steps.version.outputs.VERSION }}-x64-msvc.zip"
-          Remove-Item ".\temp_package" -Recurse -Force
-
-      - name: Upload Windows Build (MSVC)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Citron-Windows-Nightly-MSVC-x64
-          path: "dist/*.zip"
 
   build-clangtron:
     name: "Citron Build (Windows Clangtron - x64)"
@@ -450,7 +176,7 @@ jobs:
   release:
     if: ${{ github.ref_name == 'main' }}
     name: "Release"
-    needs: [check-version, build-mingw, build-msvc, build-clangtron]
+    needs: [check-version, build-clangtron]
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -460,15 +186,14 @@ jobs:
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: Citron-Windows-Nightly-*
-          merge-multiple: true
+          name: Citron-Windows-Nightly-Clangtron-x64
           path: ./release-artifacts
       - name: Get Version from Filename
         shell: bash
         run: |
-          FILENAME=$(basename "$(ls ./release-artifacts/Citron-windows-nightly-*-x64-mingw.zip)")
+          FILENAME=$(basename "$(ls ./release-artifacts/Citron-windows-nightly-*-x64-clangtron.zip)")
           VERSION=${FILENAME#Citron-windows-nightly-}
-          VERSION=${VERSION%-x64-mingw.zip}
+          VERSION=${VERSION%-x64-clangtron.zip}
           echo "APP_VERSION=${VERSION}" >> $GITHUB_ENV
       - name: Delete Previous Release
         run: gh release delete "nightly-windows" --repo "${{ github.repository }}" --cleanup-tag -y || true
@@ -483,8 +208,6 @@ jobs:
           tag_name: "nightly-windows"
           prerelease: false
           files: |
-            release-artifacts/*-x64-mingw.zip
-            release-artifacts/*-x64-msvc.zip
             release-artifacts/*-x64-clangtron.zip
           body: |
             **Citron Upstream Commit:** [`${{ needs.check-version.outputs.new_hash }}`](https://github.com/citron-neo/emulator/commit/${{ needs.check-version.outputs.new_hash_full }})
@@ -493,7 +216,7 @@ jobs:
 
             **Build Details:**
             - Platform: Windows (x64)
-            - Toolchains: MinGW-w64 (MSYS2 UCRT64) + MSVC (Visual Studio 2022) + Clangtron (Clang LTO cross-compiled)
+            - Toolchain: Clangtron (Clang LTO cross-compiled from Linux)
             - Build Type: Release
             - Date: ${{ env.BUILD_DATE }}
       - name: Update LATEST_VERSION
@@ -519,5 +242,5 @@ jobs:
             exit 0
           fi
           curl -H "Content-Type: application/json" \
-               -d "{\"content\":\"🪟 **New Windows Builds Available!**\n\n📦 **Version:** \`${{ env.APP_VERSION }}\`\n📅 **Date:** ${DATE}\n🔧 **Toolchains:** MinGW-w64 (UCRT64) + MSVC + Clangtron (Clang LTO)\n🔗 **Download:** $DOWNLOAD_URL\"}" \
+               -d "{\"content\":\"🪟 **New Windows Build Available!**\n\n📦 **Version:** \`${{ env.APP_VERSION }}\`\n📅 **Date:** ${DATE}\n🔧 **Toolchain:** Clangtron (Clang LTO)\n🔗 **Download:** $DOWNLOAD_URL\"}" \
                "$WEBHOOK_URL"
