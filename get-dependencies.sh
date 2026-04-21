@@ -37,6 +37,7 @@ pacman -Syu --noconfirm --needed \
 	pulseaudio-alsa     \
 	qt6-networkauth     \
 	qt6-multimedia      \
+	qt6-svg             \
 	qt6-tools           \
 	qt6-translations    \
 	sdl2                \
