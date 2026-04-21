@@ -10,7 +10,6 @@ fi
 
 # Construct unique names for the AppImage and tarball based on the build matrix.
 OUTNAME_BASE="citron_nightly-${APP_VERSION}-linux-${ARCH}${ARCH_SUFFIX}"
-export OUTNAME_TAR="${OUTNAME_BASE}.tar.zst"
 
 SHARUN="https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/refs/heads/main/useful-tools/quick-sharun.sh"
 export OUTNAME="${OUTNAME_BASE}.AppImage"
@@ -28,13 +27,4 @@ fi
 wget --retry-connrefused --tries=30 "$SHARUN" -O ./quick-sharun
 chmod +x ./quick-sharun
 ./quick-sharun /usr/bin/citron* /usr/lib/libgamemode.so*
-
-echo "Creating tar.zst archive..."
-
-(cd AppDir && tar -c --zstd -f ../"$OUTNAME_TAR" usr)
-echo "Successfully created $OUTNAME_TAR"
-
 ./quick-sharun --make-appimage
-
-mkdir -p ./dist
-mv -v ./*.tar.zst ./dist
