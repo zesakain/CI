@@ -765,6 +765,8 @@ jobs:
     if: needs.check-version.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    env:
+      CPM_SOURCE_CACHE: /home/runner/.cache/cpm
 
     steps:
       - uses: actions/checkout@v4
@@ -781,7 +783,7 @@ jobs:
 
             rm -rf citron
 
-            if git clone --recursive "https://github.com/citron-neo/emulator.git" citron; then
+            if git clone "https://github.com/citron-neo/emulator.git" citron; then
               echo "Clone successful on attempt $ATTEMPT."
               break
             fi
@@ -795,22 +797,19 @@ jobs:
             sleep 15
           done
 
-      - name: Cache llvm-mingw toolchain
-        uses: actions/cache@v4
-        id: cache-llvm-mingw
-        with:
-          path: ./citron/build/llvm-mingw
-          key: clangtron-llvm-mingw-${{ runner.os }}-20260224
+      - name: Init required submodules
+        working-directory: ./citron
+        run: |
+          echo "CPM manages all dependencies — no submodules needed for Clangtron"
 
-      - name: Cache vcpkg archives (Clangtron)
+      - name: Cache CPM and Toolchain (Clangtron)
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/vcpkg/archives
-            citron/externals/vcpkg/downloads
-          key: clangtron-vcpkg-stable-${{ runner.os }}-${{ hashFiles('citron/vcpkg.json', 'citron/build-clangtron-windows.sh') }}
+          path: /home/runner/.cache/cpm
+          key: clangtron-cache-stable-${{ runner.os }}-${{ hashFiles('citron/CMakeModules/dependencies.cmake', 'citron/build-clangtron-windows.sh') }}
           restore-keys: |
-            clangtron-vcpkg-stable-${{ runner.os }}-
+            clangtron-cache-stable-${{ runner.os }}-
+
 
       - name: Get Version (Clangtron)
         id: version
@@ -820,26 +819,6 @@ jobs:
           VERSION=$(git rev-parse --short HEAD)
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
 
-      - name: Get FFmpeg Version
-        id: ffmpeg-ver
-        working-directory: ./citron
-        run: |
-          VERSION=$(tr -d '[:space:]' < externals/ffmpeg/ffmpeg/RELEASE)
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-
-      - name: Cache built FFmpeg
-        uses: actions/cache@v4
-        with:
-          path: citron/build/use-nopgo/externals/ffmpeg-${{ steps.ffmpeg-ver.outputs.VERSION }}
-          key: clangtron-ffmpeg-built-stable-${{ runner.os }}-${{ steps.ffmpeg-ver.outputs.VERSION }}-${{ hashFiles('citron/build-clangtron-windows.sh') }}
-
-      - name: Cache Qt (Clangtron)
-        uses: actions/cache@v4
-        with:
-          path: |
-            citron/build/use-nopgo/externals/qt
-            citron/build/use-nopgo/externals/qt-host
-          key: clangtron-qt-6.9.3-stable-${{ runner.os }}-${{ hashFiles('citron/build-clangtron-windows.sh') }}
 
       - name: Skip BOLT build (not needed for --pgo none)
         run: |
@@ -853,7 +832,7 @@ jobs:
         run: |
           chmod +x build-clangtron-windows.sh
           ./build-clangtron-windows.sh setup
-          echo "${GITHUB_WORKSPACE}/citron/build/llvm-mingw/bin" >> "$GITHUB_PATH"
+          echo "${HOME}/.cache/cpm/llvm-mingw/bin" >> "$GITHUB_PATH"
 
       - name: Build Citron (Clangtron LTO)
         working-directory: ./citron
